@@ -2,6 +2,7 @@ import { Task } from "../../libs/config/schema";
 import { prisma } from "../../libs/config/prismaClient";
 import { HttpError } from "../../libs/helper/httpError";
 import { validate } from "../../libs/helper/validator";
+import { parsePagination } from "../../libs/helper/pagination";
 
 const statuses = ["active", "completed", "archived"];
 const statusRule = `in:${statuses.join(",")}`;
@@ -36,8 +37,7 @@ export async function create(userId: number, body: Record<string, any>) {
 }
 
 export async function list(userId: number, query: Record<string, any>) {
-  const page = Math.max(1, Number(query.page) || 1),
-    limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
+  const { page, limit, skip } = parsePagination(query);
   const where: any = { userId };
   if (query.status) {
     const v = validate(query, { status: statusRule });
@@ -47,8 +47,8 @@ export async function list(userId: number, query: Record<string, any>) {
   const [projects, total] = await Promise.all([
     prisma.project.findMany({
       where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * limit,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip,
       take: limit,
     }),
     prisma.project.count({ where }),
@@ -99,7 +99,7 @@ export async function update(
     where: { id, userId },
   });
   if (!exists) throw new HttpError(404, "Project not found");
-  return prisma.project.update({ where: { id }, data });
+  return prisma.project.update({ where: { id, userId }, data });
 }
 
 export async function remove(userId: number, rawId: unknown) {
@@ -117,5 +117,5 @@ export async function remove(userId: number, rawId: unknown) {
       { taskCount },
     );
   }
-  await prisma.project.delete({ where: { id } });
+  await prisma.project.delete({ where: { id, userId } });
 }

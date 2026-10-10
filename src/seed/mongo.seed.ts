@@ -109,6 +109,14 @@ async function main() {
     throw new Error("No projects found. Run `npm run seed:prisma` first.");
   }
 
+  // Opt-in safety guard: the wipe is destructive, so it must be confirmed
+  // explicitly. SEED_ALLOW_WIPE is intentionally not part of .env.example.
+  if (process.env.SEED_ALLOW_WIPE !== "true") {
+    throw new Error(
+      "Refusing to wipe tasks collection. Set SEED_ALLOW_WIPE=true to confirm.",
+    );
+  }
+
   await Task.deleteMany({});
 
   const docs = projects.flatMap((project) =>

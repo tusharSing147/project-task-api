@@ -9,9 +9,12 @@ export interface JwtPayload {
   id: string;
   role: string;
 }
+export function jwtExpiresIn(): string {
+  return process.env.JWT_EXPIRES_IN || "1d";
+}
 export function signToken(
   payload: JwtPayload,
-  expiresIn: jwt.SignOptions["expiresIn"] = "1d",
+  expiresIn: jwt.SignOptions["expiresIn"] = jwtExpiresIn() as jwt.SignOptions["expiresIn"],
 ): string {
   return jwt.sign({ id: payload.id, role: payload.role }, secret(), {
     expiresIn,

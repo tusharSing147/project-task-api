@@ -1,8 +1,9 @@
 import mongoose from "mongoose";
 import { Task } from "../../libs/config/schema";
-import { prisma } from "../../libs/config/prismaClient";
 import { HttpError } from "../../libs/helper/httpError";
 import { validate } from "../../libs/helper/validator";
+import { parsePagination } from "../../libs/helper/pagination";
+import { assertProjectOwned } from "../../libs/helper/ownership";
 
 const statuses = ["todo", "in_progress", "completed"];
 const priorities = ["low", "medium", "high"];
@@ -24,18 +25,13 @@ export async function create(userId: number, body: Record<string, any>) {
     title: "required|string|min:1|max:200",
     status: statusRule,
     priority: priorityRule,
-    dueDate: "date",
+    dueDate: "date|nullable",
     projectId: `required|${projectIdRule}`,
   });
   if (!v.passed) throw new HttpError(422, "Validation failed", v.errors);
   const { title, description, status, priority, dueDate, projectId } = body;
   const pid = Number(projectId);
-  const project = await prisma.project.findFirst({
-    where: { id: pid, userId },
-  });
-  if (!project) {
-    throw new HttpError(404, "Project not found or not owned by user");
-  }
+  await assertProjectOwned(pid, userId);
   return Task.create({
     title: String(title).trim(),
     description: description == null ? "" : String(description),
@@ -48,8 +44,7 @@ export async function create(userId: number, body: Record<string, any>) {
 }
 
 export async function list(userId: number, query: Record<string, any>) {
-  const page = Math.max(1, Number(query.page) || 1),
-    limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
+  const { page, limit, skip } = parsePagination(query);
   const filter: any = { userId };
   const rules: Record<string, string> = {};
   if (query.status) rules.status = statusRule;
@@ -64,8 +59,8 @@ export async function list(userId: number, query: Record<string, any>) {
   if (query.projectId) filter.projectId = Number(query.projectId);
   const [items, total] = await Promise.all([
     Task.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(skip)
       .limit(limit)
       .lean(),
     Task.countDocuments(filter),
@@ -107,7 +102,7 @@ export async function update(
   if (title !== undefined) rules.title = "string|min:1|max:200";
   if (status !== undefined) rules.status = statusRule;
   if (priority !== undefined) rules.priority = priorityRule;
-  if (dueDate !== undefined) rules.dueDate = "date";
+  if (dueDate !== undefined) rules.dueDate = "date|nullable";
   if (projectId !== undefined) rules.projectId = projectIdRule;
   const v = validate(withTrimmedTitle(body), rules);
   if (!v.passed) throw new HttpError(422, "Validation failed", v.errors);
@@ -121,12 +116,7 @@ export async function update(
   }
   if (projectId !== undefined) {
     const pid = Number(projectId);
-    const project = await prisma.project.findFirst({
-      where: { id: pid, userId },
-    });
-    if (!project) {
-      throw new HttpError(404, "Project not found or not owned by user");
-    }
+    await assertProjectOwned(pid, userId);
     data.projectId = pid;
   }
   const task = await Task.findOneAndUpdate(

@@ -30,7 +30,7 @@ export async function register(body: Record<string, any>) {
       password: await bcrypt.hash(String(password), 12),
     },
   });
-  const token = signToken({ id: String(user.id), role: "user" }, "7d");
+  const token = signToken({ id: String(user.id), role: "user" });
   return { user: publicUser(user), token };
 }
 
@@ -47,7 +47,7 @@ export async function login(body: Record<string, any>) {
   if (!user || !(await bcrypt.compare(String(password), user.password))) {
     throw new HttpError(401, "Invalid email or password");
   }
-  const token = signToken({ id: String(user.id), role: "user" }, "1d");
+  const token = signToken({ id: String(user.id), role: "user" });
   return { user: publicUser(user), token };
 }
 

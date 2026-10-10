@@ -29,7 +29,3 @@ export function connectMongo(): Promise<typeof mongoose> {
   globalForMongoose.mongooseConnecting = promise;
   return promise;
 }
-
-export function isMongoConnected(): boolean {
-  return mongoose.connection.readyState === 1;
-}

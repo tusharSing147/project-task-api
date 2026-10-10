@@ -11,6 +11,11 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["index.ts", "src/**/*.ts", "prisma/**/*.ts"],
+  "include": [
+    "index.ts",
+    "src/**/*.ts",
+    "prisma/**/*.ts",
+    "tests/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

@@ -112,9 +112,33 @@ const unauthorized = {
   content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
 };
 
+const rateLimited = {
+  description: "Too many requests to /api/auth (rate limit exceeded)",
+  content: {
+    "application/json": {
+      schema: { $ref: "#/components/schemas/Error" },
+      example: {
+        success: false,
+        message: "Too many requests, please try again later",
+        data: null,
+      },
+    },
+  },
+};
+
 const notFound = (message: string) => ({
   description: message,
   content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } },
+});
+
+const conflict = (message: string, data: object | null = null) => ({
+  description: message,
+  content: {
+    "application/json": {
+      schema: { $ref: "#/components/schemas/Error" },
+      example: { success: false, message, data },
+    },
+  },
 });
 
 const unprocessable = (example: string) => ({
@@ -215,8 +239,9 @@ const options: swaggerJsDoc.Options = {
                 token: { type: "string" },
               },
             }),
-            409: notFound("Email already registered"),
+            409: conflict("Email already registered"),
             422: unprocessable("The email field must be a valid email address."),
+            429: rateLimited,
           },
         },
       },
@@ -250,6 +275,7 @@ const options: swaggerJsDoc.Options = {
             }),
             401: notFound("Invalid email or password"),
             422: unprocessable("The email field must be a valid email address."),
+            429: rateLimited,
           },
         },
       },
@@ -262,6 +288,7 @@ const options: swaggerJsDoc.Options = {
             200: ok("Success", { $ref: "#/components/schemas/User" }),
             401: unauthorized,
             404: notFound("User not found"),
+            429: rateLimited,
           },
         },
       },
@@ -290,7 +317,9 @@ const options: swaggerJsDoc.Options = {
           responses: {
             200: ok("Profile updated", { $ref: "#/components/schemas/User" }),
             401: unauthorized,
+            409: conflict("Email already registered"),
             422: unprocessable("Provide name, email, or password to update"),
+            429: rateLimited,
           },
         },
       },
