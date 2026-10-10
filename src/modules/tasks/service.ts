@@ -2,31 +2,34 @@ import mongoose from "mongoose";
 import { Task } from "../../libs/config/schema";
 import { prisma } from "../../libs/config/prismaClient";
 import { HttpError } from "../../libs/helper/httpError";
+import { validate } from "../../libs/helper/validator";
 
 const statuses = ["todo", "in_progress", "completed"];
 const priorities = ["low", "medium", "high"];
+const statusRule = `in:${statuses.join(",")}`;
+const priorityRule = `in:${priorities.join(",")}`;
+const projectIdRule = "integer|regex:/^[1-9]\\d*$/";
 const validId = (id: unknown): id is string =>
   typeof id === "string" && mongoose.isValidObjectId(id);
 
+function withTrimmedTitle(body: Record<string, any>): Record<string, unknown> {
+  return typeof body.title === "string"
+    ? { ...body, title: body.title.trim() }
+    : { ...body };
+}
+
 export async function create(userId: number, body: Record<string, any>) {
+  const data = withTrimmedTitle(body);
+  const v = validate(data, {
+    title: "required|string|min:1|max:200",
+    status: statusRule,
+    priority: priorityRule,
+    dueDate: "date",
+    projectId: `required|${projectIdRule}`,
+  });
+  if (!v.passed) throw new HttpError(422, "Validation failed", v.errors);
   const { title, description, status, priority, dueDate, projectId } = body;
-  if (
-    typeof title !== "string" ||
-    title.trim().length < 1 ||
-    title.trim().length > 200
-  ) {
-    throw new HttpError(422, "title is required (1–200 characters)");
-  }
-  if (status !== undefined && !statuses.includes(status)) {
-    throw new HttpError(422, "Invalid status", statuses);
-  }
-  if (priority !== undefined && !priorities.includes(priority)) {
-    throw new HttpError(422, "Invalid priority", priorities);
-  }
   const pid = Number(projectId);
-  if (!Number.isSafeInteger(pid) || pid < 1) {
-    throw new HttpError(422, "Valid projectId is required");
-  }
   const project = await prisma.project.findFirst({
     where: { id: pid, userId },
   });
@@ -34,7 +37,7 @@ export async function create(userId: number, body: Record<string, any>) {
     throw new HttpError(404, "Project not found or not owned by user");
   }
   return Task.create({
-    title: title.trim(),
+    title: String(title).trim(),
     description: description == null ? "" : String(description),
     status: status ?? "todo",
     priority: priority ?? "medium",
@@ -48,25 +51,17 @@ export async function list(userId: number, query: Record<string, any>) {
   const page = Math.max(1, Number(query.page) || 1),
     limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
   const filter: any = { userId };
-  if (query.status) {
-    if (!statuses.includes(String(query.status))) {
-      throw new HttpError(422, "Invalid status", statuses);
-    }
-    filter.status = String(query.status);
+  const rules: Record<string, string> = {};
+  if (query.status) rules.status = statusRule;
+  if (query.priority) rules.priority = priorityRule;
+  if (query.projectId) rules.projectId = projectIdRule;
+  if (Object.keys(rules).length) {
+    const v = validate(query, rules);
+    if (!v.passed) throw new HttpError(422, "Validation failed", v.errors);
   }
-  if (query.priority) {
-    if (!priorities.includes(String(query.priority))) {
-      throw new HttpError(422, "Invalid priority", priorities);
-    }
-    filter.priority = String(query.priority);
-  }
-  if (query.projectId) {
-    const pid = Number(query.projectId);
-    if (!Number.isSafeInteger(pid) || pid < 1) {
-      throw new HttpError(422, "Invalid projectId");
-    }
-    filter.projectId = pid;
-  }
+  if (query.status) filter.status = String(query.status);
+  if (query.priority) filter.priority = String(query.priority);
+  if (query.projectId) filter.projectId = Number(query.projectId);
   const [items, total] = await Promise.all([
     Task.find(filter)
       .sort({ createdAt: -1 })
@@ -100,42 +95,32 @@ export async function update(
 ) {
   if (!validId(id)) throw new HttpError(400, "Invalid task ID");
   const { title, description, status, priority, dueDate, projectId } = body;
+  const anyField =
+    title !== undefined ||
+    description !== undefined ||
+    status !== undefined ||
+    priority !== undefined ||
+    dueDate !== undefined ||
+    projectId !== undefined;
+  if (!anyField) throw new HttpError(422, "No valid fields supplied");
+  const rules: Record<string, string> = {};
+  if (title !== undefined) rules.title = "string|min:1|max:200";
+  if (status !== undefined) rules.status = statusRule;
+  if (priority !== undefined) rules.priority = priorityRule;
+  if (dueDate !== undefined) rules.dueDate = "date";
+  if (projectId !== undefined) rules.projectId = projectIdRule;
+  const v = validate(withTrimmedTitle(body), rules);
+  if (!v.passed) throw new HttpError(422, "Validation failed", v.errors);
   const data: any = {};
-  if (title !== undefined) {
-    if (
-      typeof title !== "string" ||
-      title.trim().length < 1 ||
-      title.trim().length > 200
-    ) {
-      throw new HttpError(422, "Invalid title");
-    }
-    data.title = title.trim();
-  }
+  if (title !== undefined) data.title = String(title).trim();
   if (description !== undefined) data.description = String(description);
-  if (status !== undefined) {
-    if (!statuses.includes(status)) {
-      throw new HttpError(422, "Invalid status", statuses);
-    }
-    data.status = status;
-  }
-  if (priority !== undefined) {
-    if (!priorities.includes(priority)) {
-      throw new HttpError(422, "Invalid priority", priorities);
-    }
-    data.priority = priority;
-  }
+  if (status !== undefined) data.status = status;
+  if (priority !== undefined) data.priority = priority;
   if (dueDate !== undefined) {
-    const date = dueDate === null ? null : new Date(dueDate);
-    if (date && Number.isNaN(date.getTime())) {
-      throw new HttpError(422, "Invalid dueDate");
-    }
-    data.dueDate = date;
+    data.dueDate = dueDate === null ? null : new Date(dueDate);
   }
   if (projectId !== undefined) {
     const pid = Number(projectId);
-    if (!Number.isSafeInteger(pid) || pid < 1) {
-      throw new HttpError(422, "Invalid projectId");
-    }
     const project = await prisma.project.findFirst({
       where: { id: pid, userId },
     });
@@ -143,9 +128,6 @@ export async function update(
       throw new HttpError(404, "Project not found or not owned by user");
     }
     data.projectId = pid;
-  }
-  if (!Object.keys(data).length) {
-    throw new HttpError(422, "No valid fields supplied");
   }
   const task = await Task.findOneAndUpdate(
     { _id: id, userId },
