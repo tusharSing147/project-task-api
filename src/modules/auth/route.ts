@@ -1,11 +1,9 @@
 import { Router } from 'express';
 import * as controller from './controller';
-import { verifyTokenMiddleware } from '../../../libs/middleware/verifyToken';
-
+import { verifyTokenMiddleware } from '../../libs/middleware/verifyToken';
 const router = Router();
-
 router.post('/register', controller.register);
 router.post('/login', controller.login);
 router.get('/me', verifyTokenMiddleware, controller.getMe);
-
+router.put('/profile', verifyTokenMiddleware, controller.updateProfile);
 export default router;

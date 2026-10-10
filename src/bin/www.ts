@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import app from '../index';
+import app from '../../index';
 import http from 'http';
 import dotenv from 'dotenv';
 import { connectMongo } from '../libs/config/mongoose';

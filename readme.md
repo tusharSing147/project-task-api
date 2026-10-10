@@ -1,110 +1,44 @@
-# Project Task API
+# Project & Task Management API
 
-Project & Task management API with **dual databases**:
+Express + TypeScript backend based on the supplied `src(3).zip` structure and assessment document.
 
-- **MySQL** via [Prisma](https://www.prisma.io/) — users, projects, tasks (relational core)
-- **MongoDB** via [Mongoose](https://mongoosejs.com/) — activity logs, notifications (flexible documents)
-
-Built on Express 5 + TypeScript (CommonJS), modeled on the Propertist backend architecture.
-
-## Prerequisites
-
-- Node.js >= 18
-- pnpm
-- MySQL 8+
-- MongoDB (local or Atlas)
+## Database decision
+- Users and projects: MySQL through Prisma.
+- Tasks: MongoDB through Mongoose, matching the assessment's explicit task-management requirement.
+- Dashboard combines MySQL project counts and MongoDB task counts.
 
 ## Setup
+1. Install Node.js 20+ and run `npm install`.
+2. Copy `.env.example` to `.env` and configure MySQL, MongoDB, and a random JWT secret (minimum 32 characters).
+3. Ensure the MySQL database named in `DATABASE_URL` exists.
+4. Run `npm run prisma:generate`.
+5. Run `npm run prisma:migrate -- --name init`.
+6. Run `npm run dev`.
 
-```bash
-pnpm install
-cp example.env .env       # then set DATABASE_URL, MONGODB_URI, JWT_SECRET
-pnpm run create-db        # prisma db push (creates MySQL tables)
-pnpm run prisma-generate  # generate Prisma Client
-pnpm run dev              # start dev server (nodemon + ts-node)
-```
+The server requires both databases at startup. API base URL defaults to `http://localhost:3000`. Swagger UI is at `/api-docs`.
 
-## Scripts
+## Authentication
+Pass JWT using `Authorization: Bearer <token>` (also accepts `x-access-token` for compatibility with the existing code).
 
-| Script | Description |
-|---|---|
-| `pnpm run dev` | Dev server with hot reload |
-| `pnpm run build` | `prisma generate` + compile TypeScript to `dist/` |
-| `pnpm start` | Run compiled build |
-| `pnpm run create-db` | Push Prisma schema to MySQL (`prisma db push`) |
-| `pnpm run prisma-generate` | Regenerate Prisma Client |
-| `pnpm typecheck` | Type-check without emitting |
+## Endpoints
+- `POST /api/auth/register` body `{ "name": "Kunal", "email": "kunal@example.com", "password": "StrongPassword123" }`
+- `POST /api/auth/login` body `{ "email": "kunal@example.com", "password": "StrongPassword123" }`
+- `GET /api/auth/me`
+- `PUT /api/auth/profile` body can include `name`, `email`, and/or `password`
+- `POST /api/projects` body `{ "name": "Website", "description": "Project details", "status": "active" }`
+- `GET /api/projects?page=1&limit=10&status=active`
+- `GET /api/projects/:id`, `PUT /api/projects/:id`, `DELETE /api/projects/:id`
+- `POST /api/tasks` body `{ "title": "Build login", "projectId": 1, "status": "todo", "priority": "high" }`
+- `GET /api/tasks?page=1&limit=10&status=todo&priority=high&projectId=1`
+- `GET /api/tasks/:id`, `PUT /api/tasks/:id`, `DELETE /api/tasks/:id`
+- `GET /api/dashboard`
+- `GET /api/health`
 
-## Environment Variables
+All project/task/dashboard endpoints are authenticated. Project and task reads/updates/deletes are scoped to the signed-in user. Task project IDs refer to MySQL Project IDs.
 
-```bash
-DATABASE_URL="mysql://user:pass@localhost:3306/project_task_api"   # Prisma (MySQL)
-MONGODB_URI="mongodb://localhost:27017/project_task_api"           # Mongoose (MongoDB)
-JWT_SECRET="your_jwt_secret_key"
-PORT=3000
-```
+## Responses
+Success: `{ "success": true, "message": "...", "data": ... }`
+Error: `{ "success": false, "message": "...", "data": ... }`
 
-## Project Structure
-
-```
-├── bin/www.ts                    # HTTP server bootstrap (connects Mongo, listens)
-├── index.ts                      # App factory: middleware, routes, error handlers
-├── libs/
-│   ├── config/
-│   │   ├── prismaClient.ts       # Prisma singleton (hot-reload safe)
-│   │   ├── mongoose.ts           # Mongoose connection singleton
-│   │   ├── jwt.ts                # signToken / verifyToken
-│   │   └── swagger.ts            # OpenAPI 3.0 + /api-docs
-│   ├── helper/validator.ts       # validatorjs wrapper
-│   └── middleware/
-│       ├── verifyToken.ts        # JWT auth (x-access-token header/cookie)
-│       └── guestMiddleware.ts    # optional auth
-├── prisma/schema.prisma          # MySQL: User, Project, ProjectMember, Task
-└── src/Module/
-    ├── auth/                     # MySQL — register/login/me
-    ├── project/                  # MySQL — project CRUD
-    ├── task/                     # MySQL — task CRUD per project
-    ├── log/                      # MongoDB — activity logs (TTL 30d)
-    └── notification/             # MongoDB — user notifications
-```
-
-## API Endpoints
-
-Auth: send JWT in `x-access-token` header.
-
-| Method | Path | Auth | DB | Description |
-|---|---|---|---|---|
-| GET | `/health` | — | Both | Pings MySQL (`SELECT 1`) + Mongo readyState |
-| GET | `/api-docs` | — | — | Swagger UI |
-| POST | `/api/v1/auth/register` | — | MySQL | Register (name, email, password) |
-| POST | `/api/v1/auth/login` | — | MySQL | Login → JWT (24h) |
-| GET | `/api/v1/auth/me` | JWT | MySQL | Current user |
-| GET | `/api/v1/project` | JWT | MySQL | My projects (paginated) |
-| POST | `/api/v1/project` | JWT | MySQL | Create project |
-| GET | `/api/v1/project/:id` | JWT | MySQL | Project detail + tasks |
-| PUT | `/api/v1/project/:id` | JWT | MySQL | Update (owner only) |
-| DELETE | `/api/v1/project/:id` | JWT | MySQL | Delete (owner only) |
-| GET | `/api/v1/task/project/:projectId` | JWT | MySQL | List tasks (filter `?status=`) |
-| POST | `/api/v1/task/project/:projectId` | JWT | MySQL | Create task |
-| PUT | `/api/v1/task/:id` | JWT | MySQL | Update task |
-| DELETE | `/api/v1/task/:id` | JWT | MySQL | Delete task |
-| GET | `/api/v1/log` | JWT | **Mongo** | My activity logs (filter `?entityType=`) |
-| POST | `/api/v1/log` | JWT | **Mongo** | Record an activity log |
-| GET | `/api/v1/notification` | JWT | **Mongo** | My notifications (`?unread=true`) |
-| POST | `/api/v1/notification` | JWT | **Mongo** | Create notification |
-| PATCH | `/api/v1/notification/:id/read` | JWT | **Mongo** | Mark as read |
-
-## Response Envelope
-
-All responses follow:
-
-```json
-{ "success": true, "message": "...", "data": [], "pagination": { "page": 1, "limit": 10, "total": 0, "totalPages": 1 } }
-```
-
-## Notes
-
-- Validation rules use Laravel-style strings via `validatorjs`; the `nullable` prefix is handled by `libs/helper/validator.ts` (stripped + skipped when the value is absent).
-- Passwords are hashed with **bcryptjs**.
-- Mongoose connects eagerly at boot (`bin/www.ts`); Prisma connects lazily on first query.
-- `/health` returns 503 if either database is unreachable.
+## Important
+The uploaded source ZIP did not include `index.ts`, `package.json`, `tsconfig.json`, or a Prisma schema. These are supplied here to make a complete project scaffold. The schema is copied from the separately supplied `schema(2).prisma`. Run the build and test endpoints in your environment before submission.

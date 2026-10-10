@@ -1,85 +1,53 @@
-import createError from 'http-errors';
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import express, { NextFunction, Request, Response } from 'express';
-import fileUpload from 'express-fileupload';
-import path from 'path';
-import cookieParser from 'cookie-parser';
-import bodyParser from 'body-parser';
-import session from 'express-session';
 import cors from 'cors';
-import mongoose from 'mongoose';
-import * as swagger from './libs/config/swagger';
-import { prisma } from './libs/config/prismaClient';
-import { isMongoConnected } from './libs/config/mongoose';
-
-dotenv.config();
+import cookieParser from 'cookie-parser';
+import authRoutes from './src/modules/auth/route';
+import projectRoutes from './src/modules/projects/route';
+import taskRoutes from './src/modules/tasks/route';
+import dashboardRoutes from './src/modules/dashboard/route';
+import { connectMongo } from './src/libs/config/mongoose';
+import { prisma } from './src/libs/config/prismaClient';
+import { swaggerSetup } from './src/libs/config/swagger';
 
 const app = express();
-
-app.use(
-    fileUpload({
-        createParentPath: true,
-    })
-);
-
 app.use(cors());
-
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
-app.use(
-    session({
-        secret: process.env.JWT_SECRET || '123',
-        resave: false,
-        saveUninitialized: false,
-    })
-);
+app.get('/api/health', (_req, res) => res.json({ success: true, message: 'API is healthy' }));
+app.use('/api/auth', authRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+swaggerSetup(app);
 
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.use(express.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
-app.use(bodyParser.json({ limit: '10mb' }));
-
-import authRoutes from './src/Module/auth/route';
-
-app.use('/api/v1/auth', authRoutes);
-
-app.get('/health', async (req: Request, res: Response) => {
-    let mysql = false;
-    try {
-        await prisma.$queryRaw`SELECT 1`;
-        mysql = true;
-    } catch {
-        mysql = false;
-    }
-
-    const mongo = isMongoConnected() && mongoose.connection.readyState === 1;
-
-    res.status(mysql && mongo ? 200 : 503).send({
-        success: mysql && mongo,
-        message: mysql && mongo ? 'API is healthy' : 'One or more databases are unreachable',
-        data: {
-            mysql: mysql ? 'up' : 'down',
-            mongo: mongo ? 'up' : 'down',
-        },
-    });
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ success: false, message: 'Route not found', data: null });
 });
 
-swagger.swaggerSetup(app);
-
-app.use((req: Request, res: Response, next: NextFunction) => {
-    next(createError(404));
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error(err);
+  if (err?.code === 'P2002') {
+    res.status(409).json({ success: false, message: 'A record with this value already exists', data: null }); return;
+  }
+  if (err?.name === 'ValidationError' || err?.name === 'CastError') {
+    res.status(422).json({ success: false, message: 'Invalid request data', data: err.message }); return;
+  }
+  if (err?.name === 'JsonWebTokenError' || err?.name === 'TokenExpiredError') {
+    res.status(401).json({ success: false, message: 'Invalid or expired token', data: null }); return;
+  }
+  res.status(500).json({ success: false, message: 'Internal server error', data: null });
 });
 
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-    res.removeHeader('X-Powered-By');
-    res.status(err.status || 500);
-    res.send({
-        success: false,
-        message: err.status === 404 ? 'API Not Found' : 'Internal Server Error',
-        data: [],
-        error: req.app.get('env') === 'development' ? err.message : undefined,
-    });
-});
-
+const port = Number(process.env.PORT || 3000);
+async function start() {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+    throw new Error('JWT_SECRET must be set and at least 32 characters long');
+  }
+  await prisma.$connect();
+  await connectMongo();
+  app.listen(port, () => console.log(`API listening on port ${port}`));
+}
+if (require.main === module) start().catch((e) => { console.error('Startup failed:', e); process.exit(1); });
 export default app;
