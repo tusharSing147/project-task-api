@@ -9,6 +9,7 @@ import dashboardRoutes from './src/modules/dashboard/route';
 import { connectMongo } from './src/libs/config/mongoose';
 import { prisma } from './src/libs/config/prismaClient';
 import { swaggerSetup } from './src/libs/config/swagger';
+import { HttpError } from './src/libs/helper/httpError';
 
 const app = express();
 app.use(cors());
@@ -27,6 +28,9 @@ app.use((_req: Request, res: Response) => {
 });
 
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof HttpError || err?.name === 'HttpError') {
+    res.status(err.statusCode).json({ success: false, message: err.message, data: err.data ?? null }); return;
+  }
   console.error(err);
   if (err?.code === 'P2002') {
     res.status(409).json({ success: false, message: 'A record with this value already exists', data: null }); return;
