@@ -1,61 +1,63 @@
 #!/usr/bin/env node
 
-import app from '../../index';
-import http from 'http';
-import dotenv from 'dotenv';
-import { connectMongo } from '../libs/config/mongoose';
+import app from "../../index";
+import http from "http";
+import dotenv from "dotenv";
+import { connectMongo } from "../libs/config/mongoose";
 
 dotenv.config();
 
-const port = normalizePort(process.env.PORT || '3000');
-app.set('port', port);
+const port = normalizePort(process.env.PORT || "3000");
+app.set("port", port);
 
 const server = http.createServer(app);
 
 async function main(): Promise<void> {
-    try {
-        await connectMongo();
-    } catch (err) {
-        console.error('Failed to connect to MongoDB:', (err as Error).message);
-        console.error('Server will start, but MongoDB-dependent endpoints will fail.');
-    }
+  try {
+    await connectMongo();
+  } catch (err) {
+    console.error("Failed to connect to MongoDB:", (err as Error).message);
+    console.error(
+      "Server will start, but MongoDB-dependent endpoints will fail.",
+    );
+  }
 
-    server.listen(port);
-    server.on('error', onError);
-    server.on('listening', onListening);
+  server.listen(port);
+  server.on("error", onError);
+  server.on("listening", onListening);
 }
 
 function normalizePort(val: string): number | string | false {
-    const port = parseInt(val, 10);
-    if (isNaN(port)) return val;
-    if (port >= 0) return port;
-    return false;
+  const port = parseInt(val, 10);
+  if (isNaN(port)) return val;
+  if (port >= 0) return port;
+  return false;
 }
 
 function onError(error: NodeJS.ErrnoException): void {
-    if (error.syscall !== 'listen') throw error;
+  if (error.syscall !== "listen") throw error;
 
-    const bind = typeof port === 'string' ? 'Pipe ' + port : 'Port ' + port;
+  const bind = typeof port === "string" ? "Pipe " + port : "Port " + port;
 
-    switch (error.code) {
-        case 'EACCES':
-            console.error(bind + ' requires elevated privileges');
-            process.exit(1);
-        case 'EADDRINUSE':
-            console.error(bind + ' is already in use');
-            process.exit(1);
-        default:
-            throw error;
-    }
+  switch (error.code) {
+    case "EACCES":
+      console.error(bind + " requires elevated privileges");
+      process.exit(1);
+    case "EADDRINUSE":
+      console.error(bind + " is already in use");
+      process.exit(1);
+    default:
+      throw error;
+  }
 }
 
 function onListening(): void {
-    const addr = server.address();
-    const bind = typeof addr === 'string' ? `pipe ${addr}` : `port ${addr?.port}`;
-    console.log(`Server started on ${bind}`);
+  const addr = server.address();
+  const bind = typeof addr === "string" ? `pipe ${addr}` : `port ${addr?.port}`;
+  console.log(`Server started on ${bind}`);
 }
 
 main().catch((err) => {
-    console.error('Fatal startup error:', err);
-    process.exit(1);
+  console.error("Fatal startup error:", err);
+  process.exit(1);
 });
