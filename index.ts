@@ -41,16 +41,8 @@ app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 app.use(bodyParser.json({ limit: '10mb' }));
 
 import authRoutes from './src/Module/auth/route';
-import projectRoutes from './src/Module/project/route';
-import taskRoutes from './src/Module/task/route';
-import logRoutes from './src/Module/log/route';
-import notificationRoutes from './src/Module/notification/route';
 
 app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/project', projectRoutes);
-app.use('/api/v1/task', taskRoutes);
-app.use('/api/v1/log', logRoutes);
-app.use('/api/v1/notification', notificationRoutes);
 
 app.get('/health', async (req: Request, res: Response) => {
     let mysql = false;
