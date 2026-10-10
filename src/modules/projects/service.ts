@@ -1,3 +1,4 @@
+import { Task } from "../../libs/config/schema";
 import { prisma } from "../../libs/config/prismaClient";
 import { HttpError } from "../../libs/helper/httpError";
 import { validate } from "../../libs/helper/validator";
@@ -108,5 +109,13 @@ export async function remove(userId: number, rawId: unknown) {
     where: { id, userId },
   });
   if (!project) throw new HttpError(404, "Project not found");
+  const taskCount = await Task.countDocuments({ projectId: id });
+  if (taskCount > 0) {
+    throw new HttpError(
+      409,
+      "Cannot delete project: it is already in use by tasks",
+      { taskCount },
+    );
+  }
   await prisma.project.delete({ where: { id } });
 }
