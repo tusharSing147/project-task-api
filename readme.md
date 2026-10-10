@@ -54,7 +54,7 @@ npm run prisma:migrate -- --name init
 mongod --dbpath /path/to/data
 ```
 
-Set `MONGODB_URI` in `.env` (default `mongodb://127.0.0.1:27017/project_task_db`). The app connects at startup and the test suite connects in `tests/setup.ts`. Tasks live in the `tasks` collection.
+Set `MONGODB_URI` in `.env` (default `mongodb://127.0.0.1:27017/project_task_db`). The app connects at startup. Tasks live in the `tasks` collection.
 
 ## 6. Environment variables
 
@@ -95,7 +95,6 @@ Demo login after seeding:
 ```bash
 npm run dev             # hot reload via ts-node-dev
 npm run build && npm start   # tsc → dist/, then node dist/index.js
-npm test                # jest --runInBand (tests/ folder, live databases)
 npm run lint            # eslint .
 ```
 
